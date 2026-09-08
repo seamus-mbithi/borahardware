@@ -1,0 +1,6 @@
+{
+  "name": "Bora Hardware",
+  "description": "Inventory tracking, stock management, WhatsApp & cart ordering, and admin dashboard for Bora Hardware.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

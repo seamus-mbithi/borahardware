@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper validation for product
+    function isValidProduct(data) {
+      return data.name is string && data.name.size() > 0 &&
+             data.category is string &&
+             data.sellingPrice is number && data.sellingPrice >= 0 &&
+             data.quantity is number && data.quantity >= 0 &&
+             data.inStock is bool;
+    }
+
+    // Products collection: public read for store catalog, validated writes
+    match /products/{productId} {
+      allow read: if true;
+      allow create, update: if isValidProduct(request.resource.data);
+      allow delete: if true;
+    }
+
+    // Orders collection: clients can create orders, store staff can update status
+    match /orders/{orderId} {
+      allow read: if true;
+      allow create: if request.resource.data.customerName is string &&
+                       request.resource.data.customerPhone is string &&
+                       request.resource.data.subtotal is number;
+      allow update: if true;
+      allow delete: if false;
+    }
+
+    // Health check / connection test collection
+    match /test/{docId} {
+      allow read, write: if true;
+    }
+  }
+}

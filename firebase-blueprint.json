@@ -1,0 +1,54 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "Hardware store product item in inventory",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique product ID" },
+        "name": { "type": "string", "description": "Product title" },
+        "category": { "type": "string", "description": "Product category" },
+        "buyingPrice": { "type": "number", "description": "Unit purchase price in KES" },
+        "sellingPrice": { "type": "number", "description": "Unit selling price in KES" },
+        "unit": { "type": "string", "description": "Unit of measurement (bag, bar, piece)" },
+        "quantity": { "type": "number", "description": "Available stock quantity" },
+        "inStock": { "type": "boolean", "description": "Whether item is currently in stock" },
+        "description": { "type": "string", "description": "Product details and site use instructions" },
+        "lowStockThreshold": { "type": "number", "description": "Alert threshold for low stock" },
+        "badge": { "type": "string", "description": "Optional promotion or quality badge" },
+        "imageUrl": { "type": "string", "description": "Optional photo URL for product" }
+      },
+      "required": ["id", "name", "category", "buyingPrice", "sellingPrice", "unit", "quantity", "inStock", "description", "lowStockThreshold"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Customer purchase order",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique order reference" },
+        "customerName": { "type": "string", "description": "Client full name" },
+        "customerPhone": { "type": "string", "description": "Contact telephone number" },
+        "deliveryLocation": { "type": "string", "description": "Delivery address or pickup instructions" },
+        "orderType": { "type": "string", "description": "Order channel: whatsapp, mpesa_direct, walkin" },
+        "items": { "type": "array", "description": "List of ordered items" },
+        "subtotal": { "type": "number", "description": "Total order amount in KES" },
+        "status": { "type": "string", "description": "Order status: pending, fulfilled, cancelled" },
+        "stockDeducted": { "type": "boolean", "description": "Whether stock has been subtracted" },
+        "createdAt": { "type": "string", "description": "Order creation ISO timestamp" },
+        "paymentRef": { "type": "string", "description": "M-Pesa or payment receipt code" },
+        "notes": { "type": "string", "description": "Customer order remarks" }
+      },
+      "required": ["id", "customerName", "customerPhone", "deliveryLocation", "orderType", "items", "subtotal", "status", "stockDeducted", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Bora Hardware inventory catalog items"
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Customer orders logged via WhatsApp and M-Pesa"
+    }
+  }
+}
