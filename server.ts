@@ -501,25 +501,35 @@ app.post("/api/mpesa/callback", (req: Request, res: Response) => {
 // ==========================================
 // VITE MIDDLEWARE & STATIC SERVING
 // ==========================================
-async function start() {
+
+async function configureApp() {
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
+
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");
+
     app.use(express.static(distPath));
+
     app.get("*", (_req: Request, res: Response) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
+}
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Bora Hardware Server listening on http://0.0.0.0:${PORT}`);
+// Local development only
+if (process.env.VERCEL !== "1") {
+  configureApp().then(() => {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(
+        `Bora Hardware Server listening on http://0.0.0.0:${PORT}`
+      );
+    });
   });
 }
 
 export default app;
-
