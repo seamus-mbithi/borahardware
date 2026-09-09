@@ -515,9 +515,15 @@ async function configureApp() {
 
     app.use(express.static(distPath));
 
-    app.get("*", (_req: Request, res: Response) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
+   app.get("*", (req: Request, res: Response) => {
+  if (req.path.startsWith("/api/")) {
+    res.status(404).json({ error: "API endpoint not found" });
+    return;
+  }
+
+  res.sendFile(path.join(distPath, "index.html"));
+});
+
   }
 }
 
