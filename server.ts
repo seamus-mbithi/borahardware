@@ -23,6 +23,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
+
 app.use(express.json());
 
 // Initialize Firestore strictly on the backend server so the Google API key is never bundled in browser assets
