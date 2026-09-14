@@ -21,7 +21,13 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onSuccess, onClose }) =>
     const cleanUser = username.trim().toLowerCase();
     const cleanPass = password.trim();
 
+    // Known valid store administrator credentials for Bora Hardware
+    const isDirectMatch = (cleanUser === 'mbithi' || cleanUser === 'admin') && cleanPass === 'simba910';
+
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1800);
+
       const response = await fetch('/api/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -29,39 +35,31 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onSuccess, onClose }) =>
           username: cleanUser,
           password: cleanPass,
         }),
-      });
+        signal: controller.signal,
+      }).catch(() => null);
 
-      const contentType = response.headers.get('content-type') || '';
-      if (contentType.includes('application/json')) {
-        const data = await response.json();
-        if (response.ok && data.success) {
-          onSuccess();
-          return;
+      clearTimeout(timeoutId);
+
+      if (response && response.ok) {
+        const contentType = response.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          const data = await response.json();
+          if (data && data.success) {
+            onSuccess();
+            return;
+          }
         }
-        // Resilient fallback check for mbithi / simba910 even if server env is missing
-        const isUserValid = cleanUser === 'mbithi' || cleanUser === 'admin';
-        const isPassValid = cleanPass === 'simba910';
-        if (isUserValid && isPassValid) {
-          onSuccess();
-          return;
-        }
-        setError(data.error || 'Invalid admin credentials. Please verify username and password.');
-        return;
       }
     } catch {
-      // Backend unreachable or network offline - fallback check below
+      // Backend not running on serverless static host (e.g. Vercel SPA) - fallback evaluated below
     } finally {
       setLoading(false);
     }
 
-    // Direct fallback check for static hosting (e.g. Vercel SPA) or offline management
-    const isUserValid = cleanUser === 'mbithi' || cleanUser === 'admin';
-    const isPassValid = cleanPass === 'simba910';
-
-    if (isUserValid && isPassValid) {
+    if (isDirectMatch) {
       onSuccess();
     } else {
-      setError('Invalid admin credentials. Please verify username and password.');
+      setError('Invalid admin credentials. Please verify your username and password.');
     }
   };
 

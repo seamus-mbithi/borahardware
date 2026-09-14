@@ -1,13 +1,13 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
-import firebaseConfig from '../../firebase-applet-config.json';
+import { FIREBASE_APPLET_CONFIG } from './firebaseConfig';
 
 // Initialize Firebase App
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+const app = getApps().length === 0 ? initializeApp(FIREBASE_APPLET_CONFIG) : getApp();
 
 // Initialize Firestore with the explicit database ID
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export const db = getFirestore(app, FIREBASE_APPLET_CONFIG.firestoreDatabaseId);
 
 // Initialize Firebase Auth
 export const auth = getAuth(app);

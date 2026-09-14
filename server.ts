@@ -13,21 +13,23 @@ import {
   deleteDoc,
 } from "firebase/firestore";
 import { INITIAL_PRODUCTS } from "./src/data/initialProducts";
+import { FIREBASE_APPLET_CONFIG } from "./src/lib/firebaseConfig";
 
 dotenv.config();
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
-
 app.use(express.json());
 
-// Initialize Firestore strictly on the backend server so the Google API key is never bundled in browser assets
+// Initialize Firestore on the backend server with fallback to central FIREBASE_APPLET_CONFIG
 let firestoreDb: any = null;
 try {
-  let firebaseConfig: any = null;
+  let firebaseConfig: any = FIREBASE_APPLET_CONFIG;
   if (fs.existsSync("./firebase-applet-config.json")) {
-    firebaseConfig = JSON.parse(fs.readFileSync("./firebase-applet-config.json", "utf-8"));
+    try {
+      firebaseConfig = JSON.parse(fs.readFileSync("./firebase-applet-config.json", "utf-8"));
+    } catch {}
   }
 
   if (firebaseConfig && firebaseConfig.projectId) {
