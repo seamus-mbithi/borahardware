@@ -262,13 +262,49 @@ export default function App() {
   };
 
   const handleOrderPlaced = (newOrder: Order) => {
-    const updatedOrders = [newOrder, ...orders];
+    // 1. Automatically deduct stock from purchased items
+    let updatedProducts = [...products];
+    const touchedProducts: Product[] = [];
+
+    newOrder.items.forEach((item) => {
+      const idx = updatedProducts.findIndex((p) => p.id === item.productId);
+      if (idx !== -1) {
+        const currentProd = updatedProducts[idx];
+        const newQty = Math.max(0, currentProd.quantity - item.quantity);
+        const updatedProd: Product = {
+          ...currentProd,
+          quantity: newQty,
+          inStock: newQty > 0,
+        };
+        updatedProducts[idx] = updatedProd;
+        touchedProducts.push(updatedProd);
+      }
+    });
+
+    const finalizedOrder: Order = {
+      ...newOrder,
+      stockDeducted: true,
+    };
+
+    const updatedOrders = [finalizedOrder, ...orders.filter((o) => o.id !== finalizedOrder.id)];
+    setProducts(updatedProducts);
     setOrders(updatedOrders);
+    saveStoredProducts(updatedProducts);
     saveStoredOrders(updatedOrders);
-    saveOrderToCloud(newOrder).catch((err) => {
+
+    // 2. Persist order to shared Firestore cloud database
+    saveOrderToCloud(finalizedOrder).catch((err) => {
       console.warn('Order cloud sync warning:', err);
     });
-    showToast(`Order ${newOrder.id} logged for Bora Hardware!`);
+
+    // 3. Persist deducted stock to Firestore so all devices see new stock immediately
+    touchedProducts.forEach((prod) => {
+      saveProductToCloud(prod).catch((err) => {
+        console.warn('Product stock cloud sync warning:', err);
+      });
+    });
+
+    showToast(`Order ${newOrder.id} logged for Bora Hardware! Stock updated.`);
   };
 
   // Quick WhatsApp for single product

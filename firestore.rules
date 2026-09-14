@@ -24,7 +24,7 @@ service cloud.firestore {
                        request.resource.data.customerPhone is string &&
                        request.resource.data.subtotal is number;
       allow update: if true;
-      allow delete: if false;
+      allow delete: if true;
     }
 
     // Health check / connection test collection
