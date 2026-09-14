@@ -28,6 +28,7 @@ import { CartDrawer } from './components/CartDrawer';
 import { Footer } from './components/Footer';
 import { AdminLogin } from './components/admin/AdminLogin';
 import { AdminDashboard } from './components/admin/AdminDashboard';
+import { SearchIconBadge, SEARCH_FEATURED_ITEMS } from './components/SearchIconBadge';
 import {
   CheckCircle2,
   Phone,
@@ -43,12 +44,16 @@ import {
   Sparkles,
   ArrowUpDown,
   Zap,
+  RotateCw,
+  Layers,
+  Boxes,
 } from 'lucide-react';
 
 const QUICK_SEARCH_CHIPS = [
-  { label: 'Simba Cement', query: 'Simba Cement' },
+  { label: 'Spinners', query: 'spinner', icon: RotateCw, isFeatured: true, color: 'text-cyan-600', spin: true },
+  { label: 'Iron Sheets', query: 'iron sheets', icon: Layers, isFeatured: true, color: 'text-blue-600' },
+  { label: 'Cement', query: 'cement', icon: Boxes, isFeatured: true, color: 'text-amber-600' },
   { label: 'TMT Steel Rebar', query: 'Rebar' },
-  { label: 'Box Mabati 30G', query: 'Mabati' },
   { label: 'Binding Wire', query: 'Binding Wire' },
   { label: 'PPR / PVC Pipes', query: 'Pipe' },
   { label: 'Crown Paint', query: 'Paint' },
@@ -280,7 +285,18 @@ export default function App() {
       let matchesQuery = true;
       if (queryWords.length > 0) {
         const text = `${p.name} ${p.category} ${p.description} ${p.unit} ${p.sellingPrice} ${p.badge || ''}`.toLowerCase();
-        matchesQuery = queryWords.every((w) => text.includes(w));
+        matchesQuery = queryWords.every((w) => {
+          if (w === 'ironsheets' || w === 'ironsheet') {
+            return text.includes('iron') || text.includes('sheet') || text.includes('mabati');
+          }
+          if (w === 'spinner' || w === 'spinners') {
+            return text.includes('spinner') || text.includes('twister') || text.includes('wire');
+          }
+          if (w === 'cement') {
+            return text.includes('cement') || text.includes('simba') || text.includes('masonry');
+          }
+          return text.includes(w);
+        });
       }
 
       // 2. Category matching
@@ -658,17 +674,25 @@ export default function App() {
         {/* Instant Search & Filter Toolbar */}
         <div className="bg-white rounded-xl border border-stone-200 p-4 mb-6 shadow-xs">
           <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
-            {/* Direct Auto-Updating Search Input */}
+            {/* Direct Auto-Updating Search Input with SearchIconBadge */}
             <div className="relative flex-1">
+              <div className="absolute left-2.5 top-2 z-10">
+                <SearchIconBadge
+                  currentQuery={searchQuery}
+                  onSelectKeyword={(kw) => setSearchQuery(kw)}
+                  size="md"
+                  pillTheme="light"
+                  idPrefix="catalog"
+                />
+              </div>
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Direct auto-search by name, size, category, or price (e.g. Simba, 850, Rebar)..."
-                className="w-full bg-stone-50 text-stone-900 placeholder-stone-400 text-sm rounded-lg pl-10 pr-9 py-2.5 border border-stone-300 focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all"
+                placeholder="Search spinners, iron sheets, cement, rebar, paints (e.g. Simba, 850)..."
+                className="w-full bg-stone-50 text-stone-900 placeholder-stone-400 text-sm rounded-lg pl-12 pr-9 py-2.5 border border-stone-300 focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all shadow-xs"
                 id="catalog-direct-search-input"
               />
-              <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-3" />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
@@ -730,10 +754,12 @@ export default function App() {
             </span>
             {QUICK_SEARCH_CHIPS.map((chip) => {
               const isActive = searchQuery.toLowerCase().includes(chip.query.toLowerCase());
+              const ChipIcon = (chip as any).icon;
               return (
                 <button
                   key={chip.label}
                   type="button"
+                  id={`catalog-chip-${chip.label.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
                   onClick={() => {
                     if (isActive) {
                       setSearchQuery('');
@@ -741,12 +767,21 @@ export default function App() {
                       setSearchQuery(chip.query);
                     }
                   }}
-                  className={`px-2.5 py-1 rounded-full text-[11px] font-medium whitespace-nowrap transition-all flex items-center gap-1 ${
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-medium whitespace-nowrap transition-all flex items-center gap-1.5 ${
                     isActive
-                      ? 'bg-amber-500 text-stone-950 font-bold shadow-xs'
+                      ? 'bg-amber-500 text-stone-950 font-bold shadow-xs ring-1 ring-amber-400'
+                      : (chip as any).isFeatured
+                      ? 'bg-amber-50 text-stone-800 border border-amber-200/80 hover:bg-amber-100 hover:border-amber-300'
                       : 'bg-stone-100 text-stone-600 hover:bg-stone-200 hover:text-stone-900'
                   }`}
                 >
+                  {ChipIcon && (
+                    <ChipIcon
+                      className={`w-3 h-3 ${isActive ? 'text-stone-950' : (chip as any).color || 'text-stone-500'} ${
+                        (chip as any).spin && !isActive ? 'animate-spin' : ''
+                      }`}
+                    />
+                  )}
                   <span>{chip.label}</span>
                   {isActive && <X className="w-3 h-3 ml-0.5" />}
                 </button>

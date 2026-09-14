@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ShoppingCart, Phone, Search, Wrench, ShieldCheck, ArrowRight, X, Plus, CheckCircle2, AlertCircle } from 'lucide-react';
+import { ShoppingCart, Phone, Wrench, ShieldCheck, ArrowRight, X, Plus, CheckCircle2, AlertCircle } from 'lucide-react';
 import { STORE_INFO } from '../data/initialProducts';
 import { Product } from '../types';
 import { formatKES } from '../utils/storage';
+import { SearchIconBadge, SEARCH_FEATURED_ITEMS } from './SearchIconBadge';
 
 interface NavbarProps {
   cartCount: number;
@@ -53,12 +54,24 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   // Matching preview products for the instant search dropdown
   const previewMatches = React.useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) return [];
+    const raw = searchQuery.trim().toLowerCase();
+    if (!raw) return [];
+    const query = raw.replace(/ironsheets/g, 'iron sheets').replace(/mabati/g, 'iron sheets mabati');
     const words = query.split(/\s+/).filter(Boolean);
     return products.filter((p) => {
-      const text = `${p.name} ${p.category} ${p.description} ${p.unit} ${p.sellingPrice}`.toLowerCase();
-      return words.every((w) => text.includes(w));
+      const text = `${p.name} ${p.category} ${p.description} ${p.unit} ${p.sellingPrice} ${p.badge || ''}`.toLowerCase();
+      return words.every((w) => {
+        if (w === 'ironsheets' || w === 'ironsheet') {
+          return text.includes('iron') || text.includes('sheet') || text.includes('mabati');
+        }
+        if (w === 'spinner' || w === 'spinners') {
+          return text.includes('spinner') || text.includes('twister') || text.includes('wire');
+        }
+        if (w === 'cement') {
+          return text.includes('cement') || text.includes('simba') || text.includes('masonry');
+        }
+        return text.includes(w);
+      });
     }).slice(0, 5);
   }, [products, searchQuery]);
 
@@ -140,26 +153,37 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
 
-        {/* Desktop Search Bar */}
-        <div ref={searchContainerRef} className="hidden md:flex flex-1 max-w-md mx-4 relative">
+        {/* Desktop Search Bar with SearchIconBadge & Quick Filters */}
+        <div ref={searchContainerRef} className="hidden md:flex flex-col flex-1 max-w-lg mx-4 relative">
           <div className="relative w-full">
+            <div className="absolute left-2.5 top-1.5 z-10">
+              <SearchIconBadge
+                currentQuery={searchQuery}
+                onSelectKeyword={(kw) => {
+                  onSearchChange(kw);
+                  setIsSearchFocused(Boolean(kw));
+                  scrollToCatalog();
+                }}
+                size="md"
+                idPrefix="desktop-nav"
+              />
+            </div>
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => handleInputChange(e.target.value)}
               onFocus={() => setIsSearchFocused(true)}
-              placeholder="Search cement, rebar, mabati, paint, nails..."
-              className="w-full bg-stone-800 text-stone-100 placeholder-stone-400 text-sm rounded-lg pl-10 pr-9 py-2 border border-stone-700 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all"
+              placeholder="Search spinners, iron sheets, cement, rebar, paints..."
+              className="w-full bg-stone-800 text-stone-100 placeholder-stone-400 text-sm rounded-lg pl-12 pr-9 py-2 border border-stone-700 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all shadow-inner"
               id="desktop-search-input"
             />
-            <Search className="w-4 h-4 text-stone-400 absolute left-3 top-2.5" />
             {searchQuery && (
               <button
                 onClick={() => {
                   onSearchChange('');
                   setIsSearchFocused(false);
                 }}
-                className="absolute right-2.5 top-2.5 text-stone-400 hover:text-white bg-stone-700 hover:bg-stone-600 rounded-full p-0.5 transition-colors"
+                className="absolute right-2.5 top-2 text-stone-400 hover:text-white bg-stone-700 hover:bg-stone-600 rounded-full p-0.5 transition-colors"
                 title="Clear search"
               >
                 <X className="w-3.5 h-3.5" />
@@ -167,99 +191,171 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
           </div>
 
-          {/* Instant live dropdown preview */}
-          {isSearchFocused && searchQuery.trim().length > 0 && (
-            <div className="absolute left-0 right-0 top-full mt-2 bg-stone-900 border border-stone-700 rounded-xl shadow-2xl z-50 overflow-hidden text-stone-100 animate-in fade-in slide-in-from-top-2 duration-150">
-              <div className="p-2.5 bg-stone-950/90 border-b border-stone-800 flex items-center justify-between text-[11px]">
-                <span className="text-amber-400 font-semibold">
-                  Instant Matches for &ldquo;{searchQuery}&rdquo;
-                </span>
-                <span className="text-stone-400">
-                  {previewMatches.length} product{previewMatches.length !== 1 ? 's' : ''} found
-                </span>
-              </div>
+          {/* Quick Hardware Search Icon Tags: Spinners, Iron Sheets, Cement */}
+          <div className="flex items-center gap-1.5 mt-1 px-1">
+            <span className="text-[10px] uppercase font-bold text-stone-400 tracking-wider">Quick:</span>
+            {SEARCH_FEATURED_ITEMS.map((item) => {
+              const Icon = item.icon;
+              const q = searchQuery.toLowerCase();
+              const isSelected =
+                q.includes(item.query) ||
+                (item.id === 'spinners' && (q.includes('spinner') || q.includes('twister'))) ||
+                (item.id === 'ironsheets' && (q.includes('iron') || q.includes('mabati') || q.includes('sheet'))) ||
+                (item.id === 'cement' && q.includes('cement'));
 
-              {previewMatches.length === 0 ? (
-                <div className="p-4 text-center text-xs text-stone-400">
-                  <p>No exact matches found for &ldquo;{searchQuery}&rdquo;</p>
-                  <button
-                    onClick={() => {
-                      onSearchChange('');
-                      setIsSearchFocused(false);
-                    }}
-                    className="mt-2 text-amber-400 hover:underline text-[11px] font-medium"
-                  >
-                    Clear search filter
-                  </button>
-                </div>
-              ) : (
-                <div className="divide-y divide-stone-800 max-h-72 overflow-y-auto">
-                  {previewMatches.map((product) => {
-                    const isOutOfStock = !product.inStock || product.quantity <= 0;
-                    return (
-                      <div
-                        key={product.id}
-                        onClick={() => handleSelectProduct(product)}
-                        className="p-2.5 hover:bg-stone-800/80 cursor-pointer flex items-center justify-between gap-3 transition-colors"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-semibold text-xs text-white truncate">
-                              {product.name}
-                            </span>
-                            {product.badge && (
-                              <span className="bg-amber-500/20 text-amber-300 text-[9px] px-1.5 py-0.2 rounded font-bold uppercase shrink-0">
-                                {product.badge}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 text-[11px] text-stone-400 mt-0.5">
-                            <span className="text-stone-300 font-bold text-amber-400">
-                              {formatKES(product.sellingPrice)}
-                            </span>
-                            <span>•</span>
-                            <span className="text-stone-400 text-[10px]">{product.category}</span>
-                            <span>•</span>
-                            {isOutOfStock ? (
-                              <span className="text-red-400 text-[10px]">Out of stock</span>
-                            ) : (
-                              <span className="text-emerald-400 text-[10px]">
-                                {product.quantity} in stock
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {onAddToCart && !isOutOfStock && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onAddToCart(product);
-                            }}
-                            className="shrink-0 bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-bold px-2.5 py-1 rounded-md flex items-center gap-1 shadow-sm transition-transform active:scale-95"
-                            title="Add to cart"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                            <span>Add</span>
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              <div className="p-2 bg-stone-950 border-t border-stone-800 text-center">
+              return (
                 <button
+                  key={item.id}
+                  type="button"
+                  id={`nav-quick-tag-${item.id}`}
                   onClick={() => {
-                    setIsSearchFocused(false);
+                    onSearchChange(isSelected ? '' : item.query);
                     scrollToCatalog();
                   }}
-                  className="text-xs text-stone-400 hover:text-amber-400 font-medium transition-colors"
+                  className={`flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md border transition-all ${
+                    isSelected
+                      ? 'bg-amber-500 text-stone-950 font-bold border-amber-400 shadow-xs'
+                      : 'bg-stone-800/80 hover:bg-stone-700 text-stone-300 border-stone-700 hover:border-stone-600 hover:text-white'
+                  }`}
+                  title={`Filter by ${item.label}`}
                 >
-                  View all results filtered below in catalog &darr;
+                  <Icon className={`w-3 h-3 ${isSelected ? 'text-stone-950' : item.iconColor} ${item.spin ? 'animate-spin' : ''}`} />
+                  <span>{item.label}</span>
                 </button>
-              </div>
+              );
+            })}
+          </div>
+
+          {/* Instant live dropdown preview */}
+          {isSearchFocused && (
+            <div className="absolute left-0 right-0 top-full mt-2 bg-stone-900 border border-stone-700 rounded-xl shadow-2xl z-50 overflow-hidden text-stone-100 animate-in fade-in slide-in-from-top-2 duration-150">
+              {searchQuery.trim().length === 0 ? (
+                /* Initial quick choices when search is clicked */
+                <div className="p-3 bg-stone-950">
+                  <div className="text-[11px] font-bold text-stone-400 uppercase tracking-wider mb-2 flex items-center justify-between">
+                    <span>Popular Hardware Quick Searches</span>
+                    <span className="text-amber-400 text-[10px]">Instant Filter</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {SEARCH_FEATURED_ITEMS.map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => {
+                            onSearchChange(item.query);
+                            scrollToCatalog();
+                          }}
+                          className="flex flex-col items-center justify-center p-2.5 rounded-lg bg-stone-900 hover:bg-stone-800 border border-stone-800 hover:border-amber-500/50 text-center transition-all group"
+                        >
+                          <div className="w-8 h-8 rounded-full bg-stone-800 flex items-center justify-center mb-1 group-hover:scale-110 transition-transform">
+                            <Icon className={`w-4 h-4 ${item.iconColor} ${item.spin ? 'animate-spin' : ''}`} />
+                          </div>
+                          <span className="text-xs font-semibold text-stone-200 group-hover:text-amber-400">
+                            {item.label}
+                          </span>
+                          <span className="text-[10px] text-stone-400 mt-0.5">{item.description}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                /* Query matches preview */
+                <>
+                  <div className="p-2.5 bg-stone-950/90 border-b border-stone-800 flex items-center justify-between text-[11px]">
+                    <span className="text-amber-400 font-semibold">
+                      Instant Matches for &ldquo;{searchQuery}&rdquo;
+                    </span>
+                    <span className="text-stone-400">
+                      {previewMatches.length} product{previewMatches.length !== 1 ? 's' : ''} found
+                    </span>
+                  </div>
+
+                  {previewMatches.length === 0 ? (
+                    <div className="p-4 text-center text-xs text-stone-400">
+                      <p>No exact matches found for &ldquo;{searchQuery}&rdquo;</p>
+                      <button
+                        onClick={() => {
+                          onSearchChange('');
+                          setIsSearchFocused(false);
+                        }}
+                        className="mt-2 text-amber-400 hover:underline text-[11px] font-medium"
+                      >
+                        Clear search filter
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-stone-800 max-h-72 overflow-y-auto">
+                      {previewMatches.map((product) => {
+                        const isOutOfStock = !product.inStock || product.quantity <= 0;
+                        return (
+                          <div
+                            key={product.id}
+                            onClick={() => handleSelectProduct(product)}
+                            className="p-2.5 hover:bg-stone-800/80 cursor-pointer flex items-center justify-between gap-3 transition-colors"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-semibold text-xs text-white truncate">
+                                  {product.name}
+                                </span>
+                                {product.badge && (
+                                  <span className="bg-amber-500/20 text-amber-300 text-[9px] px-1.5 py-0.2 rounded font-bold uppercase shrink-0">
+                                    {product.badge}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 text-[11px] text-stone-400 mt-0.5">
+                                <span className="text-stone-300 font-bold text-amber-400">
+                                  {formatKES(product.sellingPrice)}
+                                </span>
+                                <span>•</span>
+                                <span className="text-stone-400 text-[10px]">{product.category}</span>
+                                <span>•</span>
+                                {isOutOfStock ? (
+                                  <span className="text-red-400 text-[10px]">Out of stock</span>
+                                ) : (
+                                  <span className="text-emerald-400 text-[10px]">
+                                    {product.quantity} in stock
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {onAddToCart && !isOutOfStock && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onAddToCart(product);
+                                }}
+                                className="shrink-0 bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-bold px-2.5 py-1 rounded-md flex items-center gap-1 shadow-sm transition-transform active:scale-95"
+                                title="Add to cart"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>Add</span>
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  <div className="p-2 bg-stone-950 border-t border-stone-800 text-center">
+                    <button
+                      onClick={() => {
+                        setIsSearchFocused(false);
+                        scrollToCatalog();
+                      }}
+                      className="text-xs text-stone-400 hover:text-amber-400 font-medium transition-colors"
+                    >
+                      View all results filtered below in catalog &darr;
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -300,30 +396,74 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
       </div>
 
-      {/* Mobile Search Bar - Always visible and direct */}
-      <div ref={mobileSearchRef} className="md:hidden px-4 pb-2.5 pt-1 bg-stone-900 border-t border-stone-800/80">
+      {/* Mobile Search Bar - Always visible with SearchIconBadge & Quick Filters */}
+      <div ref={mobileSearchRef} className="md:hidden px-4 pb-2.5 pt-1.5 bg-stone-900 border-t border-stone-800/80">
         <div className="relative w-full">
+          <div className="absolute left-2 top-1.5 z-10">
+            <SearchIconBadge
+              currentQuery={searchQuery}
+              onSelectKeyword={(kw) => {
+                onSearchChange(kw);
+                scrollToCatalog();
+              }}
+              size="sm"
+              idPrefix="mobile-nav"
+            />
+          </div>
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => handleInputChange(e.target.value)}
             onFocus={() => setIsSearchFocused(true)}
-            placeholder="Search cement, steel, roofing, paint..."
-            className="w-full bg-stone-800 text-stone-100 placeholder-stone-400 text-xs rounded-lg pl-9 pr-8 py-2 border border-stone-700 focus:outline-none focus:border-amber-500"
+            placeholder="Search spinners, iron sheets, cement..."
+            className="w-full bg-stone-800 text-stone-100 placeholder-stone-400 text-xs rounded-lg pl-11 pr-8 py-2 border border-stone-700 focus:outline-none focus:border-amber-500"
             id="mobile-search-input"
           />
-          <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-2.5" />
           {searchQuery && (
             <button
               onClick={() => {
                 onSearchChange('');
                 setIsSearchFocused(false);
               }}
-              className="absolute right-2.5 top-2.5 text-stone-400 hover:text-white bg-stone-700 rounded-full p-0.5"
+              className="absolute right-2.5 top-2 text-stone-400 hover:text-white bg-stone-700 rounded-full p-0.5"
             >
               <X className="w-3 h-3" />
             </button>
           )}
+        </div>
+
+        {/* Mobile Quick Hardware Search Pills */}
+        <div className="flex items-center gap-1.5 mt-1.5 overflow-x-auto scrollbar-none pb-0.5">
+          <span className="text-[9px] uppercase font-bold text-stone-400 shrink-0">Quick:</span>
+          {SEARCH_FEATURED_ITEMS.map((item) => {
+            const Icon = item.icon;
+            const q = searchQuery.toLowerCase();
+            const isSelected =
+              q.includes(item.query) ||
+              (item.id === 'spinners' && (q.includes('spinner') || q.includes('twister'))) ||
+              (item.id === 'ironsheets' && (q.includes('iron') || q.includes('mabati') || q.includes('sheet'))) ||
+              (item.id === 'cement' && q.includes('cement'));
+
+            return (
+              <button
+                key={item.id}
+                type="button"
+                id={`mobile-quick-tag-${item.id}`}
+                onClick={() => {
+                  onSearchChange(isSelected ? '' : item.query);
+                  scrollToCatalog();
+                }}
+                className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border whitespace-nowrap transition-all shrink-0 ${
+                  isSelected
+                    ? 'bg-amber-500 text-stone-950 font-bold border-amber-400 shadow-xs'
+                    : 'bg-stone-800 text-stone-300 border-stone-700 hover:border-stone-600'
+                }`}
+              >
+                <Icon className={`w-2.5 h-2.5 ${isSelected ? 'text-stone-950' : item.iconColor} ${item.spin ? 'animate-spin' : ''}`} />
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
