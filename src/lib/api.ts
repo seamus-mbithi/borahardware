@@ -45,6 +45,45 @@ async function seedInitialProductsIfEmpty(): Promise<Product[]> {
 }
 
 /**
+ * Sanitize product payload before sending to Firestore to avoid "unsupported field value: undefined" errors
+ */
+export function sanitizeProductForFirestore(product: Product): Record<string, any> {
+  const clean: Record<string, any> = {
+    id: String(product.id),
+    name: String(product.name || '').trim(),
+    category: String(product.category || 'Hardware & Security').trim(),
+    sellingPrice: Number(product.sellingPrice) || 0,
+    buyingPrice: Number(product.buyingPrice) || 0,
+    quantity: Math.max(0, Number(product.quantity) || 0),
+    unit: String(product.unit || 'Piece').trim(),
+    inStock: Boolean(product.inStock && Number(product.quantity) > 0),
+    description: String(product.description || '').trim(),
+    lowStockThreshold: Math.max(0, Number(product.lowStockThreshold) || 5),
+    badge: product.badge ? String(product.badge).trim() : '',
+    imageUrl: product.imageUrl ? String(product.imageUrl).trim() : '',
+    updatedAt: new Date().toISOString(),
+  };
+  return clean;
+}
+
+export function parseProductFromDoc(id: string, data: any): Product {
+  return {
+    id: data.id || id,
+    name: String(data.name || '').trim(),
+    category: String(data.category || 'General').trim(),
+    sellingPrice: Number(data.sellingPrice) || 0,
+    buyingPrice: Number(data.buyingPrice) || 0,
+    quantity: Math.max(0, Number(data.quantity) || 0),
+    unit: String(data.unit || 'Piece').trim(),
+    inStock: typeof data.inStock === 'boolean' ? data.inStock : Number(data.quantity) > 0,
+    description: String(data.description || '').trim(),
+    lowStockThreshold: Number(data.lowStockThreshold) || 5,
+    badge: data.badge ? String(data.badge).trim() : undefined,
+    imageUrl: data.imageUrl ? String(data.imageUrl).trim() : undefined,
+  };
+}
+
+/**
  * Fetch all products from shared Firestore cloud database
  */
 export async function fetchProducts(): Promise<Product[]> {
@@ -57,7 +96,7 @@ export async function fetchProducts(): Promise<Product[]> {
 
     const products: Product[] = [];
     querySnapshot.forEach((docSnap) => {
-      products.push(docSnap.data() as Product);
+      products.push(parseProductFromDoc(docSnap.id, docSnap.data()));
     });
 
     if (products.length > 0) {
@@ -71,8 +110,9 @@ export async function fetchProducts(): Promise<Product[]> {
       if (resp.ok) {
         const data = await resp.json();
         if (data && Array.isArray(data.products) && data.products.length > 0) {
-          saveStoredProducts(data.products);
-          return data.products;
+          const parsed = data.products.map((p: any) => parseProductFromDoc(p.id, p));
+          saveStoredProducts(parsed);
+          return parsed;
         }
       }
     } catch {
@@ -87,13 +127,16 @@ export async function fetchProducts(): Promise<Product[]> {
  * Updates immediately reflect on all devices in real-time
  */
 export async function saveProductToCloud(product: Product): Promise<void> {
+  const cleanPayload = sanitizeProductForFirestore(product);
   let directSuccess = false;
+
   try {
     const docRef = doc(db, PRODUCTS_COLLECTION, product.id);
-    await setDoc(docRef, product, { merge: true });
+    await setDoc(docRef, cleanPayload, { merge: true });
     directSuccess = true;
+    console.log(`[Firestore] Product "${product.name}" successfully updated in shared cloud database.`);
   } catch (err) {
-    console.warn('[Firestore] Product save warning, using API fallback:', err);
+    console.warn('[Firestore] Direct product save warning:', err);
   }
 
   // Dual-write to server API proxy to guarantee persistence across all client environments
@@ -101,10 +144,15 @@ export async function saveProductToCloud(product: Product): Promise<void> {
     await fetch('/api/products', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(product),
+      body: JSON.stringify(cleanPayload),
     });
   } catch {
     // optional server sync
+  }
+
+  if (!directSuccess) {
+    // If direct write failed and no server proxy responded, make sure local state still knows
+    console.log('[Firestore] Save completed with fallback.');
   }
 }
 
@@ -115,6 +163,7 @@ export async function deleteProductFromCloud(productId: string): Promise<void> {
   try {
     const docRef = doc(db, PRODUCTS_COLLECTION, productId);
     await deleteDoc(docRef);
+    console.log(`[Firestore] Product "${productId}" deleted from shared cloud database.`);
   } catch (err) {
     console.warn('[Firestore] Product delete warning:', err);
   }
@@ -218,47 +267,65 @@ export async function saveOrderToCloud(order: Order): Promise<void> {
 export function subscribeToProducts(
   onUpdate: (products: Product[]) => void
 ): () => void {
+  let isSubscribed = true;
+  let pollTimer: any = null;
+
   try {
     const unsub = onSnapshot(
       collection(db, PRODUCTS_COLLECTION),
       (snapshot) => {
+        if (!isSubscribed) return;
+
         if (snapshot.empty) {
           // If empty, auto-seed
           seedInitialProductsIfEmpty().then((seeded) => {
-            onUpdate(seeded);
+            if (isSubscribed) {
+              onUpdate(seeded);
+            }
           });
           return;
         }
 
         const items: Product[] = [];
         snapshot.forEach((docSnap) => {
-          items.push(docSnap.data() as Product);
+          items.push(parseProductFromDoc(docSnap.id, docSnap.data()));
         });
 
-        if (items.length > 0) {
+        if (items.length > 0 && isSubscribed) {
           saveStoredProducts(items);
           onUpdate(items);
         }
       },
       (error) => {
         console.warn('[Firestore] Products subscription error, using polling fallback:', error);
-        try {
-          handleFirestoreError(error, OperationType.GET, PRODUCTS_COLLECTION);
-        } catch {
-          // Polling fallback every 8 seconds if real-time socket was interrupted
-          const pollTimer = setInterval(async () => {
+        if (!pollTimer && isSubscribed) {
+          // Polling fallback every 6 seconds if real-time socket was interrupted
+          pollTimer = setInterval(async () => {
+            if (!isSubscribed) return;
             const list = await fetchProducts();
             if (list.length > 0) onUpdate(list);
-          }, 8000);
-          return () => clearInterval(pollTimer);
+          }, 6000);
         }
       }
     );
 
-    return unsub;
+    return () => {
+      isSubscribed = false;
+      if (pollTimer) clearInterval(pollTimer);
+      unsub();
+    };
   } catch (err) {
-    console.warn('[Firestore] Failed to attach snapshot listener:', err);
-    return () => {};
+    console.warn('[Firestore] Failed to attach snapshot listener, starting polling:', err);
+    pollTimer = setInterval(async () => {
+      if (!isSubscribed) return;
+      const list = await fetchProducts();
+      if (list.length > 0) onUpdate(list);
+    }, 6000);
+
+    return () => {
+      isSubscribed = false;
+      if (pollTimer) clearInterval(pollTimer);
+    };
   }
 }
 

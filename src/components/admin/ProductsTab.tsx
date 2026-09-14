@@ -98,22 +98,22 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
       return;
     }
 
-    const calculatedInStock = formQuantity > 0 ? formInStock : false;
+    const calculatedInStock = Number(formQuantity) > 0 ? formInStock : false;
 
     if (editingProduct) {
       const updated: Product = {
         ...editingProduct,
         name: formName.trim(),
         category: formCategory,
-        sellingPrice: Number(formSellingPrice),
-        buyingPrice: Number(formBuyingPrice),
-        quantity: Number(formQuantity),
+        sellingPrice: Math.max(0, Number(formSellingPrice) || 0),
+        buyingPrice: Math.max(0, Number(formBuyingPrice) || 0),
+        quantity: Math.max(0, Number(formQuantity) || 0),
         unit: formUnit.trim() || 'Piece',
         description: formDescription.trim(),
-        lowStockThreshold: Number(formLowStock),
+        lowStockThreshold: Math.max(0, Number(formLowStock) || 5),
         inStock: calculatedInStock,
-        badge: formBadge.trim() || undefined,
-        imageUrl: formImageUrl.trim() || undefined,
+        badge: formBadge.trim() ? formBadge.trim() : undefined,
+        imageUrl: formImageUrl.trim() ? formImageUrl.trim() : undefined,
       };
       onUpdateProduct(updated);
     } else {
@@ -121,15 +121,15 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
         id: `prod-${Date.now()}`,
         name: formName.trim(),
         category: formCategory,
-        sellingPrice: Number(formSellingPrice),
-        buyingPrice: Number(formBuyingPrice),
-        quantity: Number(formQuantity),
+        sellingPrice: Math.max(0, Number(formSellingPrice) || 0),
+        buyingPrice: Math.max(0, Number(formBuyingPrice) || 0),
+        quantity: Math.max(0, Number(formQuantity) || 0),
         unit: formUnit.trim() || 'Piece',
         description: formDescription.trim(),
-        lowStockThreshold: Number(formLowStock),
+        lowStockThreshold: Math.max(0, Number(formLowStock) || 5),
         inStock: calculatedInStock,
-        badge: formBadge.trim() || undefined,
-        imageUrl: formImageUrl.trim() || undefined,
+        badge: formBadge.trim() ? formBadge.trim() : undefined,
+        imageUrl: formImageUrl.trim() ? formImageUrl.trim() : undefined,
       };
       onAddProduct(newProd);
     }

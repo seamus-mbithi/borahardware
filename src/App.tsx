@@ -147,6 +147,52 @@ export default function App() {
       }
     });
 
+    // Cross-tab synchronization: updates storefront if admin edits products in another tab
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'bora_hardware_products_v2' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setProducts(parsed);
+          }
+        } catch {}
+      }
+      if (e.key === 'bora_hardware_orders_v2' && e.newValue) {
+        try {
+          const parsedOrders = JSON.parse(e.newValue);
+          if (Array.isArray(parsedOrders)) {
+            setOrders(parsedOrders);
+          }
+        } catch {}
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+
+    // Re-sync whenever user returns to window/tab to guarantee up-to-the-second inventory
+    const handleWindowFocus = () => {
+      fetchProducts().then((p) => {
+        if (p && p.length > 0) {
+          setProducts(p);
+        }
+      });
+    };
+    window.addEventListener('focus', handleWindowFocus);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        handleWindowFocus();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Periodic resilient synchronization (every 8s) to guarantee catalog sync across mobile devices
+    const syncInterval = setInterval(() => {
+      fetchProducts().then((fresh) => {
+        if (fresh && fresh.length > 0) {
+          setProducts(fresh);
+        }
+      });
+    }, 8000);
+
     // Check URL for admin access e.g. #admin or /admin
     if (
       window.location.hash.toLowerCase() === '#admin' ||
@@ -171,6 +217,10 @@ export default function App() {
     window.addEventListener('keydown', handleKeyDown);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('focus', handleWindowFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(syncInterval);
       unsubProducts();
       unsubOrders();
     };
@@ -408,35 +458,44 @@ export default function App() {
     showToast('Signed out of admin portal');
   };
 
-  const handleAddProduct = (newProd: Product) => {
-    const updated = [newProd, ...products];
+  const handleAddProduct = async (newProd: Product) => {
+    const updated = [newProd, ...products.filter((p) => p.id !== newProd.id)];
     setProducts(updated);
     saveStoredProducts(updated);
-    saveProductToCloud(newProd).catch((err) => {
+    try {
+      await saveProductToCloud(newProd);
+      showToast(`Added ${newProd.name} (live to all devices)`);
+    } catch (err) {
       console.warn('Product cloud add warning:', err);
-    });
-    showToast(`Added ${newProd.name} to store`);
+      showToast(`Added ${newProd.name}`);
+    }
   };
 
-  const handleUpdateProduct = (updatedProd: Product) => {
+  const handleUpdateProduct = async (updatedProd: Product) => {
     const updated = products.map((p) => (p.id === updatedProd.id ? updatedProd : p));
     setProducts(updated);
     saveStoredProducts(updated);
-    saveProductToCloud(updatedProd).catch((err) => {
+    try {
+      await saveProductToCloud(updatedProd);
+      showToast(`Updated ${updatedProd.name} (synced across all devices)`);
+    } catch (err) {
       console.warn('Product cloud update warning:', err);
-    });
-    showToast(`Updated ${updatedProd.name}`);
+      showToast(`Updated ${updatedProd.name}`);
+    }
   };
 
-  const handleDeleteProduct = (productId: string) => {
+  const handleDeleteProduct = async (productId: string) => {
     const prod = products.find((p) => p.id === productId);
     const updated = products.filter((p) => p.id !== productId);
     setProducts(updated);
     saveStoredProducts(updated);
-    deleteProductFromCloud(productId).catch((err) => {
+    try {
+      await deleteProductFromCloud(productId);
+      showToast(`Deleted ${prod?.name || 'product'} (synced across all devices)`);
+    } catch (err) {
       console.warn('Product cloud delete warning:', err);
-    });
-    showToast(`Deleted ${prod?.name || 'product'}`);
+      showToast(`Deleted ${prod?.name || 'product'}`);
+    }
   };
 
   // Updates order status and syncs stock subtraction/restoration

@@ -174,7 +174,22 @@ app.post("/api/products", async (req: Request, res: Response) => {
       return;
     }
     if (firestoreDb) {
-      await setDoc(doc(firestoreDb, "products", product.id), product);
+      const cleanProd: Record<string, any> = {
+        id: String(product.id),
+        name: String(product.name || "").trim(),
+        category: String(product.category || "Hardware & Security").trim(),
+        sellingPrice: Number(product.sellingPrice) || 0,
+        buyingPrice: Number(product.buyingPrice) || 0,
+        quantity: Math.max(0, Number(product.quantity) || 0),
+        unit: String(product.unit || "Piece").trim(),
+        inStock: Boolean(product.inStock && Number(product.quantity) > 0),
+        description: String(product.description || "").trim(),
+        lowStockThreshold: Math.max(0, Number(product.lowStockThreshold) || 5),
+        badge: product.badge ? String(product.badge).trim() : "",
+        imageUrl: product.imageUrl ? String(product.imageUrl).trim() : "",
+        updatedAt: new Date().toISOString(),
+      };
+      await setDoc(doc(firestoreDb, "products", product.id), cleanProd, { merge: true });
     }
     res.json({ success: true, product });
   } catch (err: any) {
