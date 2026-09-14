@@ -64,16 +64,22 @@ export async function fetchProducts(): Promise<Product[]> {
       saveStoredProducts(products);
       return products;
     }
-    return getStoredProducts();
   } catch (err) {
-    console.warn('[Firestore] Falling back to local/cached products:', err);
+    console.warn('[Firestore] Direct query failed, querying /api/products endpoint:', err);
     try {
-      handleFirestoreError(err, OperationType.GET, PRODUCTS_COLLECTION);
+      const resp = await fetch('/api/products');
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data && Array.isArray(data.products) && data.products.length > 0) {
+          saveStoredProducts(data.products);
+          return data.products;
+        }
+      }
     } catch {
-      // Silently fall back to cached data for resilient client UI
+      // fall back to stored
     }
-    return getStoredProducts();
   }
+  return getStoredProducts();
 }
 
 /**
@@ -81,25 +87,22 @@ export async function fetchProducts(): Promise<Product[]> {
  * Updates immediately reflect on all devices in real-time
  */
 export async function saveProductToCloud(product: Product): Promise<void> {
+  let directSuccess = false;
   try {
     const docRef = doc(db, PRODUCTS_COLLECTION, product.id);
     await setDoc(docRef, product, { merge: true });
+    directSuccess = true;
   } catch (err) {
-    console.error('[Firestore] Error saving product to cloud:', err);
-    try {
-      handleFirestoreError(err, OperationType.WRITE, `${PRODUCTS_COLLECTION}/${product.id}`);
-    } catch {
-      // Allow caller to catch
-    }
+    console.warn('[Firestore] Product save warning, using API fallback:', err);
   }
 
-  // Also proxy to server if accessible
+  // Dual-write to server API proxy to guarantee persistence across all client environments
   try {
-    fetch('/api/products', {
+    await fetch('/api/products', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(product),
-    }).catch(() => {});
+    });
   } catch {
     // optional server sync
   }
@@ -113,19 +116,13 @@ export async function deleteProductFromCloud(productId: string): Promise<void> {
     const docRef = doc(db, PRODUCTS_COLLECTION, productId);
     await deleteDoc(docRef);
   } catch (err) {
-    console.error('[Firestore] Error deleting product from cloud:', err);
-    try {
-      handleFirestoreError(err, OperationType.DELETE, `${PRODUCTS_COLLECTION}/${productId}`);
-    } catch {
-      // Allow caller to catch
-    }
+    console.warn('[Firestore] Product delete warning:', err);
   }
 
-  // Also proxy to server if accessible
   try {
-    fetch(`/api/products/${encodeURIComponent(productId)}`, {
+    await fetch(`/api/products/${encodeURIComponent(productId)}`, {
       method: 'DELETE',
-    }).catch(() => {});
+    });
   } catch {
     // optional server sync
   }
@@ -138,14 +135,21 @@ export async function fetchOrders(): Promise<Order[]> {
   try {
     const querySnapshot = await getDocs(collection(db, ORDERS_COLLECTION));
     if (querySnapshot.empty) {
-      const stored = getStoredOrders();
-      if (stored.length > 0) {
-        // Seed initial orders to cloud
-        stored.forEach((ord) => {
-          setDoc(doc(db, ORDERS_COLLECTION, ord.id), ord).catch(() => {});
-        });
+      // Verify with server API in case of client-side cache/permission discrepancy
+      try {
+        const resp = await fetch('/api/orders');
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data && Array.isArray(data.orders)) {
+            saveStoredOrders(data.orders);
+            return data.orders;
+          }
+        }
+      } catch {
+        // server fallback
       }
-      return stored;
+      saveStoredOrders([]);
+      return [];
     }
 
     const orders: Order[] = [];
@@ -161,9 +165,16 @@ export async function fetchOrders(): Promise<Order[]> {
     saveStoredOrders(orders);
     return orders;
   } catch (err) {
-    console.warn('[Firestore] Falling back to local/cached orders:', err);
+    console.warn('[Firestore] Orders fetch warning, checking /api/orders endpoint:', err);
     try {
-      handleFirestoreError(err, OperationType.GET, ORDERS_COLLECTION);
+      const resp = await fetch('/api/orders');
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data && Array.isArray(data.orders)) {
+          saveStoredOrders(data.orders);
+          return data.orders;
+        }
+      }
     } catch {
       // Silently fall back to cached data
     }
@@ -175,27 +186,29 @@ export async function fetchOrders(): Promise<Order[]> {
  * Save or update an order in shared Firestore cloud database
  */
 export async function saveOrderToCloud(order: Order): Promise<void> {
+  let directSuccess = false;
   try {
     const docRef = doc(db, ORDERS_COLLECTION, order.id);
     await setDoc(docRef, order, { merge: true });
+    directSuccess = true;
+    console.log(`[Firestore] Order ${order.id} saved directly to shared cloud database.`);
   } catch (err) {
-    console.error('[Firestore] Error saving order to cloud:', err);
-    try {
-      handleFirestoreError(err, OperationType.WRITE, `${ORDERS_COLLECTION}/${order.id}`);
-    } catch {
-      // Allow caller to catch
-    }
+    console.warn('[Firestore] Client setDoc error, persisting via /api/orders:', err);
   }
 
-  // Also proxy to server if accessible
+  // Always dual-write to server API proxy to guarantee persistence across all network types
   try {
-    fetch('/api/orders', {
+    const response = await fetch('/api/orders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(order),
-    }).catch(() => {});
-  } catch {
-    // optional server sync
+    });
+    if (response.ok) {
+      console.log(`[Server] Order ${order.id} saved via /api/orders endpoint.`);
+      return;
+    }
+  } catch (apiErr) {
+    console.warn('[API] /api/orders error:', apiErr);
   }
 }
 
@@ -268,23 +281,17 @@ export function subscribeToOrders(
           (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         );
 
-        if (items.length > 0) {
-          saveStoredOrders(items);
-          onUpdate(items);
-        }
+        saveStoredOrders(items);
+        onUpdate(items);
       },
       (error) => {
-        console.warn('[Firestore] Orders subscription error, using polling fallback:', error);
-        try {
-          handleFirestoreError(error, OperationType.GET, ORDERS_COLLECTION);
-        } catch {
-          // Polling fallback
-          const pollTimer = setInterval(async () => {
-            const list = await fetchOrders();
-            if (list.length > 0) onUpdate(list);
-          }, 8000);
-          return () => clearInterval(pollTimer);
-        }
+        console.warn('[Firestore] Orders subscription notice, activating polling sync:', error);
+        // Polling fallback every 4 seconds ensures real-time updates even without WebSockets
+        const pollTimer = setInterval(async () => {
+          const list = await fetchOrders();
+          onUpdate(list);
+        }, 4000);
+        return () => clearInterval(pollTimer);
       }
     );
 

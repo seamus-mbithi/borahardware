@@ -46,66 +46,7 @@ export function getStoredOrders(): Order[] {
   try {
     const raw = localStorage.getItem(ORDERS_KEY);
     if (!raw) {
-      // Seed with 1-2 realistic historical orders so the admin revenue page shows data immediately
-      const initialOrders: Order[] = [
-        {
-          id: 'BORA-1001',
-          customerName: 'Kiprono Builders',
-          customerPhone: '0722123456',
-          deliveryLocation: 'Ruai Site Phase 2',
-          orderType: 'whatsapp',
-          items: [
-            {
-              productId: 'prod-simba-cement-50kg',
-              productName: 'Simba Cement 50kg',
-              unit: '50kg Bag',
-              quantity: 40,
-              sellingPrice: 850,
-              buyingPrice: 720,
-              total: 34000,
-            },
-            {
-              productId: 'prod-binding-wire-25kg',
-              productName: 'Rhino Binding Wire 25kg',
-              unit: '25kg Roll',
-              quantity: 2,
-              sellingPrice: 3200,
-              buyingPrice: 2550,
-              total: 6400,
-            },
-          ],
-          subtotal: 40400,
-          status: 'confirmed',
-          stockDeducted: true,
-          createdAt: new Date(Date.now() - 1000 * 60 * 60 * 26).toISOString(),
-          notes: 'Customer confirmed payment on delivery via M-Pesa.',
-        },
-        {
-          id: 'BORA-1002',
-          customerName: 'Mama Kelvin Hardware Retail',
-          customerPhone: '0711987654',
-          deliveryLocation: 'Joska Center',
-          orderType: 'cart_checkout',
-          items: [
-            {
-              productId: 'prod-mabati-box-30g-3m',
-              productName: 'Mabati Iron Sheets 30G (3 Metres)',
-              unit: 'Piece (3m)',
-              quantity: 15,
-              sellingPrice: 950,
-              buyingPrice: 790,
-              total: 14250,
-            },
-          ],
-          subtotal: 14250,
-          status: 'pending',
-          stockDeducted: false,
-          createdAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-          notes: 'Awaiting site delivery confirmation.',
-        },
-      ];
-      localStorage.setItem(ORDERS_KEY, JSON.stringify(initialOrders));
-      return initialOrders;
+      return [];
     }
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : [];

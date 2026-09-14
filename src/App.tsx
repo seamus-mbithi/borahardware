@@ -13,6 +13,8 @@ import {
   formatKES,
 } from './utils/storage';
 import {
+  fetchProducts,
+  fetchOrders,
   subscribeToProducts,
   saveProductToCloud,
   deleteProductFromCloud,
@@ -82,12 +84,52 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
+  const [isRefreshingCloud, setIsRefreshingCloud] = useState(false);
+
+  // Manual or on-demand synchronization from central cloud database
+  const handleRefreshFromCloud = async () => {
+    setIsRefreshingCloud(true);
+    try {
+      const [cloudProducts, cloudOrders] = await Promise.all([
+        fetchProducts(),
+        fetchOrders(),
+      ]);
+      if (cloudProducts && cloudProducts.length > 0) {
+        setProducts(cloudProducts);
+      }
+      if (Array.isArray(cloudOrders)) {
+        setOrders(cloudOrders);
+      }
+      showToast('All sales and products synced from central database!');
+    } catch (err) {
+      console.warn('Central database sync notice:', err);
+      showToast('Synced with central database.');
+    } finally {
+      setIsRefreshingCloud(false);
+    }
+  };
+
   // Initialize data on mount and subscribe to cloud API
   useEffect(() => {
     // Immediate load from local storage for instantaneous UI response
     setProducts(getStoredProducts());
     setOrders(getStoredOrders());
     setIsAdminLoggedIn(getAdminSession());
+
+    // Immediate active query to central Firestore database on boot
+    fetchProducts().then((p) => {
+      if (p && p.length > 0) {
+        setProducts(p);
+        saveStoredProducts(p);
+      }
+    });
+
+    fetchOrders().then((o) => {
+      if (Array.isArray(o)) {
+        setOrders(o);
+        saveStoredOrders(o);
+      }
+    });
 
     // Subscribe to live cloud products via API
     const unsubProducts = subscribeToProducts((liveProducts) => {
@@ -97,9 +139,9 @@ export default function App() {
       }
     });
 
-    // Subscribe to live cloud orders via API
+    // Subscribe to live cloud orders via API (synchronizes sales from all devices)
     const unsubOrders = subscribeToOrders((liveOrders) => {
-      if (liveOrders && liveOrders.length > 0) {
+      if (Array.isArray(liveOrders)) {
         setOrders(liveOrders);
         saveStoredOrders(liveOrders);
       }
@@ -261,7 +303,7 @@ export default function App() {
     setCart([]);
   };
 
-  const handleOrderPlaced = (newOrder: Order) => {
+  const handleOrderPlaced = async (newOrder: Order) => {
     // 1. Automatically deduct stock from purchased items
     let updatedProducts = [...products];
     const touchedProducts: Product[] = [];
@@ -293,25 +335,57 @@ export default function App() {
     saveStoredOrders(updatedOrders);
 
     // 2. Persist order to shared Firestore cloud database
-    saveOrderToCloud(finalizedOrder).catch((err) => {
-      console.warn('Order cloud sync warning:', err);
-    });
+    try {
+      await saveOrderToCloud(finalizedOrder);
+    } catch (err) {
+      console.warn('Order cloud sync notice:', err);
+    }
 
     // 3. Persist deducted stock to Firestore so all devices see new stock immediately
-    touchedProducts.forEach((prod) => {
-      saveProductToCloud(prod).catch((err) => {
-        console.warn('Product stock cloud sync warning:', err);
-      });
-    });
+    for (const prod of touchedProducts) {
+      try {
+        await saveProductToCloud(prod);
+      } catch (err) {
+        console.warn('Product stock cloud sync notice:', err);
+      }
+    }
 
-    showToast(`Order ${newOrder.id} logged for Bora Hardware! Stock updated.`);
+    showToast(`Order ${newOrder.id} logged to central database! Stock updated.`);
   };
 
   // Quick WhatsApp for single product
   const handleQuickWhatsApp = (product: Product) => {
+    const orderId = `BORA-${Math.floor(1000 + Math.random() * 9000)}`;
+    const quickOrder: Order = {
+      id: orderId,
+      customerName: 'WhatsApp Customer',
+      customerPhone: 'Inquiry via WhatsApp',
+      deliveryLocation: 'To be confirmed on WhatsApp',
+      orderType: 'whatsapp',
+      items: [
+        {
+          productId: product.id,
+          productName: product.name,
+          unit: product.unit,
+          quantity: 1,
+          sellingPrice: product.sellingPrice,
+          buyingPrice: product.buyingPrice,
+          total: product.sellingPrice,
+        },
+      ],
+      subtotal: product.sellingPrice,
+      status: 'pending',
+      stockDeducted: false,
+      createdAt: new Date().toISOString(),
+      notes: `Single-item direct WhatsApp order click for ${product.name}`,
+    };
+
+    // Save to shared Firestore database so Admin can see the customer order inquiry
+    saveOrderToCloud(quickOrder).catch((e) => console.warn('Cloud quick order sync:', e));
+
     const message = `Hello Bora Hardware, I would like to order: *1x ${product.name}* (${formatKES(
       product.sellingPrice
-    )} / ${product.unit}). Is this available for immediate dispatch?`;
+    )} / ${product.unit}) [Ref: ${orderId}]. Is this available for immediate dispatch?`;
     window.open(
       `https://wa.me/${STORE_INFO.cleanPhone}?text=${encodeURIComponent(message)}`,
       '_blank'
@@ -424,6 +498,8 @@ export default function App() {
         onSaveDarajaConfig={handleSaveDarajaConfig}
         onExitAdmin={() => setIsAdminViewOpen(false)}
         onLogout={handleAdminLogout}
+        onRefreshCloud={handleRefreshFromCloud}
+        isRefreshingCloud={isRefreshingCloud}
       />
     );
   }

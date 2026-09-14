@@ -15,6 +15,9 @@ import {
   AlertTriangle,
   Copy,
   Check,
+  RefreshCw,
+  Database,
+  Trash2,
 } from 'lucide-react';
 
 interface OrdersTabProps {
@@ -24,12 +27,16 @@ interface OrdersTabProps {
     orderId: string,
     newStatus: 'pending' | 'confirmed' | 'cancelled'
   ) => void;
+  onRefreshOrders?: () => Promise<void> | void;
+  isRefreshing?: boolean;
 }
 
 export const OrdersTab: React.FC<OrdersTabProps> = ({
   orders,
   products,
   onUpdateOrderStatus,
+  onRefreshOrders,
+  isRefreshing = false,
 }) => {
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'confirmed' | 'cancelled'>('all');
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -76,6 +83,41 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
 
   return (
     <div className="space-y-6">
+      {/* Central Database Synchronization Banner */}
+      <div className="bg-stone-900 text-stone-100 rounded-xl p-4 border border-stone-800 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+            <Database className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-white tracking-wide">
+                Unified Central Database Active
+              </span>
+              <span className="inline-flex items-center gap-1 bg-emerald-950 border border-emerald-800 text-emerald-300 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>Live Real-Time Sync</span>
+              </span>
+            </div>
+            <p className="text-[11px] text-stone-400 mt-0.5">
+              All sales from customers across any phone, tablet, or computer are automatically stored in this shared database.
+            </p>
+          </div>
+        </div>
+
+        {onRefreshOrders && (
+          <button
+            onClick={() => onRefreshOrders()}
+            disabled={isRefreshing}
+            id="admin-sync-orders-btn"
+            className="flex items-center justify-center gap-2 px-3.5 py-2 bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-bold rounded-lg shadow-sm transition-all active:scale-95 disabled:opacity-50 shrink-0"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span>{isRefreshing ? 'Syncing...' : 'Sync from Cloud'}</span>
+          </button>
+        )}
+      </div>
+
       {/* Summary Metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white p-4 rounded-xl border border-stone-200 shadow-xs">

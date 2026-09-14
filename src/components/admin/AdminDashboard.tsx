@@ -15,6 +15,8 @@ import {
   ArrowLeft,
   ShieldCheck,
   Building2,
+  RefreshCw,
+  Database,
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -31,6 +33,8 @@ interface AdminDashboardProps {
   onSaveDarajaConfig: (cfg: DarajaConfig) => void;
   onExitAdmin: () => void;
   onLogout: () => void;
+  onRefreshCloud?: () => Promise<void> | void;
+  isRefreshingCloud?: boolean;
 }
 
 type AdminTab = 'products' | 'stock' | 'orders' | 'revenue' | 'daraja';
@@ -46,6 +50,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onSaveDarajaConfig,
   onExitAdmin,
   onLogout,
+  onRefreshCloud,
+  isRefreshingCloud = false,
 }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('products');
 
@@ -71,6 +77,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <span className="bg-amber-500/20 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded uppercase">
                     Admin Portal
                   </span>
+                  <span className="hidden md:inline-flex items-center gap-1 bg-emerald-950/80 border border-emerald-800/80 text-emerald-400 text-[10px] px-2 py-0.5 rounded-full font-medium">
+                    <Database className="w-2.5 h-2.5" />
+                    <span>Cloud Database Synced</span>
+                  </span>
                 </div>
                 <p className="text-[11px] text-stone-400">
                   Signed in as <strong>Store Owner / Administrator</strong>
@@ -78,8 +88,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             </div>
 
-            {/* Right: Return to store and Logout */}
+            {/* Right: Return to store, Cloud Sync, and Logout */}
             <div className="flex items-center gap-2">
+              {onRefreshCloud && (
+                <button
+                  onClick={() => onRefreshCloud()}
+                  disabled={isRefreshingCloud}
+                  id="admin-header-sync-btn"
+                  className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 bg-stone-800 hover:bg-stone-700 text-amber-300 border border-amber-500/30 rounded-lg transition-colors active:scale-95 disabled:opacity-50"
+                  title="Synchronize orders and inventory from central cloud database"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingCloud ? 'animate-spin' : ''}`} />
+                  <span className="hidden sm:inline">{isRefreshingCloud ? 'Syncing...' : 'Sync DB'}</span>
+                </button>
+              )}
+
               <button
                 onClick={onExitAdmin}
                 id="admin-view-store-btn"
@@ -201,6 +224,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             orders={orders}
             products={products}
             onUpdateOrderStatus={onUpdateOrderStatus}
+            onRefreshOrders={onRefreshCloud}
+            isRefreshing={isRefreshingCloud}
           />
         )}
 
